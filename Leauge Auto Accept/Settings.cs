@@ -16,6 +16,7 @@ namespace Leauge_Auto_Accept
         public static string[] secondaryBackupChamp = { "Unselected", "0" };
         public static string[] secondaryBackupChampRunes = { "Unselected", "0" };
         public static string[] currentBan = { "Unselected", "0" };
+        public static string[] secondaryBan = { "Unselected", "0" };
         public static string[] currentSpell1 = { "Unselected", "0" };
         public static string[] currentSpell2 = { "Unselected", "0" };
         public static bool bravery = false;
@@ -206,7 +207,7 @@ namespace Leauge_Auto_Accept
             {
                 champsFiltered.Add(new itemList() { name = "Unselected", id = "0" });
             }
-            if (UI.currentChampPicker == 4)
+            if (UI.currentChampPicker == 4 || UI.currentChampPicker == 10)
             {
                 if ("none".Contains(Navigation.currentInput.ToLower()))
                 {
@@ -217,7 +218,7 @@ namespace Leauge_Auto_Accept
             {
                 if (champ.name.ToLower().Contains(Navigation.currentInput.ToLower()))
                 {
-                    if (UI.currentChampPicker != 4)
+                    if (UI.currentChampPicker != 4 && UI.currentChampPicker != 10)
                     {
                         if (!champ.free)
                         {
@@ -271,7 +272,7 @@ namespace Leauge_Auto_Accept
                     case 6:
                         crowdFavouraiteChamp2[0] = name;
                         crowdFavouraiteChamp2[1] = id;
-                        break;                        
+                        break;
                     case 7:
                         crowdFavouraiteChamp3[0] = name;
                         crowdFavouraiteChamp3[1] = id;
@@ -283,6 +284,10 @@ namespace Leauge_Auto_Accept
                     case 9:
                         crowdFavouraiteChamp5[0] = name;
                         crowdFavouraiteChamp5[1] = id;
+                        break;
+                    case 10:
+                        secondaryBan[0] = name;
+                        secondaryBan[1] = id;
                         break;
                 }
 
@@ -488,6 +493,8 @@ namespace Leauge_Auto_Accept
                 ",arenaCrowdFavourite5ChampId:" + crowdFavouraiteChamp5[1] +
                 ",banName:" + currentBan[0] +
                 ",banId:" + currentBan[1] +
+                ",secondaryBanName:" + secondaryBan[0] +
+                ",secondaryBanId:" + secondaryBan[1] +
                 ",spell1Name:" + currentSpell1[0] +
                 ",spell1Id:" + currentSpell1[1] +
                 ",spell2Name:" + currentSpell2[0] +
@@ -661,6 +668,12 @@ namespace Leauge_Auto_Accept
                             break;
                         case "banId":
                             currentBan[1] = columns[1];
+                            break;
+                        case "secondaryBanName":
+                            secondaryBan[0] = columns[1];
+                            break;
+                        case "secondaryBanId":
+                            secondaryBan[1] = columns[1];
                             break;
                         case "spell1Name":
                             currentSpell1[0] = columns[1];

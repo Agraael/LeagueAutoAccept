@@ -192,7 +192,8 @@ namespace Leauge_Auto_Accept
                 " Rune page",
                 "Secondary backup champion",
                 " Rune page",
-                "Select a ban",
+                "Select primary ban",
+                "Select secondary ban",
                 "Select summoner spell 1",
                 "Select summoner spell 2",
                 "Instant chat messages",
@@ -208,6 +209,7 @@ namespace Leauge_Auto_Accept
                 Settings.secondaryBackupChamp[0],
                 Settings.secondaryBackupChampRunes[0],
                 Settings.currentBan[0],
+                Settings.secondaryBan[0],
                 Settings.currentSpell1[0],
                 Settings.currentSpell2[0],
                 Settings.chatMessagesEnabled ? "Enabled, " + Settings.chatMessages.Count : "Disabled",
@@ -680,7 +682,7 @@ namespace Leauge_Auto_Accept
             {
                 champsFiltered.Add(new itemList() { name = "Unselected", id = "0" });
             }
-            if (currentChampPicker == 4)
+            if (currentChampPicker == 4 || currentChampPicker == 10)
             {
                 if ("none".Contains(Navigation.currentInput.ToLower()))
                 {
@@ -692,7 +694,7 @@ namespace Leauge_Auto_Accept
                 if (champ.name.ToLower().Contains(Navigation.currentInput.ToLower()))
                 {
                     // Make sure the champ is free or if it's for a ban before adding it to the list
-                     if (champ.free || currentChampPicker == 4 && int.Parse(champ.id) < 10000)
+                     if (champ.free || (currentChampPicker == 4 || currentChampPicker == 10) && int.Parse(champ.id) < 10000)
                     {
                         champsFiltered.Add(new itemList() { name = champ.name, id = champ.id });
                     }

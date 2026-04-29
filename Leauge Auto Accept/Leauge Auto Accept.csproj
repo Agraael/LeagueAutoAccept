@@ -4,12 +4,20 @@
     <OutputType>Exe</OutputType>
     <TargetFramework>net9.0</TargetFramework>
     <RootNamespace>Leauge_Auto_Accept</RootNamespace>
-    <Version>3.6</Version>
+    <Version>3.8</Version>
     <Company />
     <Product />
     <Authors>Artem</Authors>
     <Title>League Auto Accept</Title>
     <ApplicationIcon>icon.ico</ApplicationIcon>
+    <Description>Auto accept League of Legends queue</Description>
+    <Copyright>Copyright ©  2026</Copyright>
+    <PackageLicenseExpression>MIT</PackageLicenseExpression>
+    <PackageProjectUrl>https://github.com/Agraael/LeagueAutoAccept</PackageProjectUrl>
+    <PackageIcon>icon.ico</PackageIcon>
+    <PackageTags>League Auto Accept</PackageTags>
+    <PublishSingleFile>true</PublishSingleFile>
+    <SelfContained>false</SelfContained>
   </PropertyGroup>
 
   <ItemGroup>

@@ -1,5 +1,6 @@
 using System;
 using System.Diagnostics;
+using System.IO;
 using System.Linq;
 using System.Net.Http.Headers;
 using System.Net.Http;
@@ -26,47 +27,72 @@ namespace Leauge_Auto_Accept
         {
             while (true)
             {
-                Process client = Process.GetProcessesByName("LeagueClientUx").FirstOrDefault();
-                if (client != null)
+                try
                 {
-                    isLeagueOpen = true;
-                    if (lcuPid != client.Id)
+                    Process client = Process.GetProcessesByName("LeagueClientUx").FirstOrDefault();
+                    if (client != null)
                     {
-                        lcuPid = client.Id;
-
-                        //get token and port
-                        leagueAuth = getLeagueAuth(client);
-
-                        //reset restclient
-                        S_restClient?.Dispose(); S_restClient = null;
-
-                        // Check if preload data was enabled last time
-                        if (Settings.preloadData)
+                        isLeagueOpen = true;
+                        if (lcuPid != client.Id)
                         {
-                            Data.loadChampionsList();
-                            Data.loadSpellsList();
+                            lcuPid = client.Id;
+
+                            //get token and port
+                            leagueAuth = getLeagueAuth(client);
+
+                            //reset restclient
+                            S_restClient?.Dispose(); S_restClient = null;
+
+                            if (string.IsNullOrEmpty(leagueAuth?[1]))
+                            {
+                                Log.Error("Could not retrieve League auth (port/token). Will retry.");
+                                lcuPid = 0;
+                                Console.Clear();
+                                Print.printCentered("Could not read League auth. Run as Administrator.", SizeHandler.HeightCenter - 1);
+                                Print.printCentered("Retrying in 5 seconds...", SizeHandler.HeightCenter);
+                                Thread.Sleep(5000);
+                                continue;
+                            }
+
+                            // Check if preload data was enabled last time
+                            if (Settings.preloadData)
+                            {
+                                Data.loadChampionsList();
+                                Data.loadSpellsList();
+                            }
+                            if (Settings.shouldAutoAcceptbeOn)
+                            {
+                                MainLogic.isAutoAcceptOn = true;
+                            }
+                            if (UI.currentWindow != "exitMenu")
+                            {
+                                UI.mainScreen();
+                            }
                         }
-                        if (Settings.shouldAutoAcceptbeOn)
+                    }
+                    else
+                    {
+                        isLeagueOpen = false;
+                        MainLogic.isAutoAcceptOn = false;
+                        Data.champsSorted.Clear();
+                        Data.spellsSorted.Clear();
+                        Data.currentSummonerId = 0;
+                        if (UI.currentWindow != "leagueClientIsClosedMessage" && UI.currentWindow != "exitMenu")
                         {
-                            MainLogic.isAutoAcceptOn = true;
-                        }
-                        if (UI.currentWindow != "exitMenu")
-                        {
-                            UI.mainScreen();
+                            UI.leagueClientIsClosedMessage();
                         }
                     }
                 }
-                else
+                catch (Exception ex)
                 {
-                    isLeagueOpen = false;
-                    MainLogic.isAutoAcceptOn = false;
-                    Data.champsSorted.Clear();
-                    Data.spellsSorted.Clear();
-                    Data.currentSummonerId = 0;
-                    if (UI.currentWindow != "leagueClientIsClosedMessage" && UI.currentWindow != "exitMenu")
+                    Log.Error(ex, "Unhandled error in CheckIfLeagueClientIsOpenTask loop.");
+                    try
                     {
-                        UI.leagueClientIsClosedMessage();
+                        Console.Clear();
+                        Print.printCentered("Error: " + ex.Message, SizeHandler.HeightCenter - 1);
+                        Print.printCentered("See logs/log for details. Retrying...", SizeHandler.HeightCenter);
                     }
+                    catch { }
                 }
                 Thread.Sleep(2000);
             }
@@ -88,22 +114,50 @@ namespace Leauge_Auto_Accept
 
         private static string[] getLeagueAuth(Process client)
         {
-            string query = $"SELECT CommandLine FROM Win32_Process where ProcessId = {client.Id}";
-            string commandLine = string.Empty;
+            string port = string.Empty;
+            string authToken = string.Empty;
 
-            using (var searcher = new System.Management.ManagementObjectSearcher(query))
-            using (var results = searcher.Get())
+            try
             {
-                foreach (var result in results)
+                string query = $"SELECT CommandLine FROM Win32_Process where ProcessId = {client.Id}";
+                string commandLine = string.Empty;
+
+                using (var searcher = new System.Management.ManagementObjectSearcher(query))
+                using (var results = searcher.Get())
                 {
-                    commandLine = result["CommandLine"]?.ToString();
-                    break;
+                    foreach (var result in results)
+                    {
+                        commandLine = result["CommandLine"]?.ToString();
+                        break;
+                    }
+                }
+
+                if (!string.IsNullOrEmpty(commandLine))
+                {
+                    port = Regex.Match(commandLine, @"--app-port=""?(\d+)""?").Groups[1].Value;
+                    authToken = Regex.Match(commandLine, @"--remoting-auth-token=([a-zA-Z0-9_-]+)").Groups[1].Value;
+                }
+            }
+            catch (Exception ex)
+            {
+                Log.Warn(ex, "WMI command line read failed; falling back to lockfile.");
+            }
+
+            if (string.IsNullOrEmpty(port) || string.IsNullOrEmpty(authToken))
+            {
+                Log.Info("Command line auth missing; reading lockfile instead.");
+                var lockfileAuth = readLockfileAuth(client);
+                if (lockfileAuth != null)
+                {
+                    port = lockfileAuth[0];
+                    authToken = lockfileAuth[1];
                 }
             }
 
-            // Parse the port and auth token into variables
-            string port = Regex.Match(commandLine, @"--app-port=""?(\d+)""?").Groups[1].Value;
-            string authToken = Regex.Match(commandLine, @"--remoting-auth-token=([a-zA-Z0-9_-]+)").Groups[1].Value;
+            if (string.IsNullOrEmpty(port) || string.IsNullOrEmpty(authToken))
+            {
+                Log.Error("Failed to obtain League auth from both WMI and lockfile. Try running as Administrator.");
+            }
 
             // Compute the encoded key
             string auth = "riot:" + authToken;
@@ -111,6 +165,59 @@ namespace Leauge_Auto_Accept
 
             // Return content
             return new string[] { authBase64, port };
+        }
+
+        private static string[] readLockfileAuth(Process client)
+        {
+            string installDir = null;
+            try
+            {
+                installDir = Path.GetDirectoryName(client.MainModule?.FileName);
+            }
+            catch (Exception ex)
+            {
+                Log.Debug(ex, "Could not read MainModule.FileName (need admin?).");
+            }
+
+            var candidates = new List<string>();
+            if (!string.IsNullOrEmpty(installDir))
+            {
+                candidates.Add(Path.Combine(installDir, "lockfile"));
+                var parent = Directory.GetParent(installDir)?.FullName;
+                if (!string.IsNullOrEmpty(parent))
+                    candidates.Add(Path.Combine(parent, "lockfile"));
+            }
+
+            candidates.Add(@"C:\Riot Games\League of Legends\lockfile");
+            candidates.Add(@"D:\Riot Games\League of Legends\lockfile");
+
+            foreach (var path in candidates.Distinct())
+            {
+                if (!File.Exists(path)) continue;
+                try
+                {
+                    string content;
+                    using (var fs = new FileStream(path, FileMode.Open, FileAccess.Read, FileShare.ReadWrite | FileShare.Delete))
+                    using (var sr = new StreamReader(fs))
+                    {
+                        content = sr.ReadToEnd();
+                    }
+
+                    // LeagueClient:<pid>:<port>:<password>:<protocol>
+                    var parts = content.Split(':');
+                    if (parts.Length >= 5)
+                    {
+                        Log.Info("Read lockfile at {0}", path);
+                        return new[] { parts[2], parts[3] };
+                    }
+                }
+                catch (Exception ex)
+                {
+                    Log.Debug(ex, "Failed to read lockfile at {0}", path);
+                }
+            }
+
+            return null;
         }
 
         private static RestClient S_restClient;

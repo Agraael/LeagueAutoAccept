@@ -125,14 +125,21 @@ namespace Leauge_Auto_Accept
                 var platformConfig = JsonNode.Parse(platformConfigResp.Content); 
 
                 Console.Clear();
-                var enabledGameModes = platformConfig["Mutators"]["EnabledModes"].AsArray().GetValues<string>();
+                var enabledGameModes = platformConfig?["Mutators"]?["EnabledModes"]?.AsArray()?.GetValues<string>()
+                                       ?? Enumerable.Empty<string>();
 
                 Console.Clear();
-                foreach (var gameMode in enabledGameModes)
+                var inactiveByMode = platformConfig?["ClientSystemStates"]?["gameModeToInactiveSpellIds"];
+                if (inactiveByMode != null)
                 {
-                    foreach (var spellInactive in platformConfig["ClientSystemStates"]["gameModeToInactiveSpellIds"][gameMode].AsArray())
+                    foreach (var gameMode in enabledGameModes)
                     {
-                        availableSpells.Remove((ulong)spellInactive.GetValue<float>());
+                        var perMode = inactiveByMode[gameMode]?.AsArray();
+                        if (perMode == null) continue;
+                        foreach (var spellInactive in perMode)
+                        {
+                            availableSpells.Remove((ulong)spellInactive.GetValue<float>());
+                        }
                     }
                 }
 

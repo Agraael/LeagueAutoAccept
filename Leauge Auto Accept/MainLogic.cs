@@ -67,7 +67,6 @@ namespace Leauge_Auto_Accept
                                 break;
                             case "ChampSelect":
                                 handleChampSelect();
-                                handlePickOrderSwap();
                                 break;
                             case "InProgress":
                                 // No need to spam requests
@@ -286,6 +285,7 @@ namespace Leauge_Auto_Accept
                             pickedSpell2 = true;
                         }
                     }
+                    handlePickOrderSwap(currentChampSelect.Data);
                 }
             }
         }
@@ -503,6 +503,8 @@ namespace Leauge_Auto_Accept
 
         private static void handleBanAction(int actId, int championId, bool ActIsInProgress, LCUTypes.LolChampSelectSessionV1 currentChampSelect)
         {
+            if (championId == 0) pickedBan = false;
+
             string champSelectPhase = currentChampSelect.Timer.Phase;
 
             // make sure it's my turn to pick and that it is not the planning phase anymore
@@ -516,9 +518,15 @@ namespace Leauge_Auto_Accept
 
                     if (currentTime - Settings.banStartHoverDelay > champSelectStart) // Check if enough time has passed since planning phase has started
                     {
+                        // Determine which ban to use based on position preference
+                        bool usePrimaryBan = handleChampPositionPreferences(currentChampSelect, currentChampSelect.LocalPlayerCellId);
+                        string banToUse = usePrimaryBan ? Settings.currentBan[1] : Settings.secondaryBan[1];
+
                         // Ban none if the setting is disabled.
-                        bool dontBanCrowd = isArena && Settings.banCrowdFavourite && isInCrowdFavoriteChamps(Settings.currentBan[1]);
-                        hoverChampion(actId, int.Parse(dontBanCrowd ? "0" : Settings.currentBan[1]), "ban");
+                        bool dontBanCrowd = isArena && Settings.banCrowdFavourite && isInCrowdFavoriteChamps(banToUse);
+                        int banId = int.Parse(dontBanCrowd ? "0" : banToUse);
+                        hoverChampion(actId, banId, "ban");
+                        if (pickedBan) championId = banId;
                     }
                 }
 
@@ -591,29 +599,28 @@ namespace Leauge_Auto_Accept
             }
         }
 
-        private static void handlePickOrderSwap()
+        private static void handlePickOrderSwap(LCUTypes.LolChampSelectSessionV1 session)
         {
-            // Return if we already locked in or if the settings is off
-            if (!Settings.autoPickOrderTrade || lockedChamp)
+            // Return if the settings is off
+            if (!Settings.autoPickOrderTrade)
             {
                 return;
             }
 
-            // Get ongoing swap data
-            var swapResp = LCU.clientRequest("GET", "lol-champ-select/v1/ongoing-swap");
-            if (swapResp.IsSuccessStatusCode)
+            if (session.PickOrderSwaps != null)
             {
-                // If the swap was called by local player, return
-                if (swapResp.Content.Contains("initiatedByLocalPlayer\":true"))
+                foreach (var swap in session.PickOrderSwaps)
                 {
-                    return;
+                    if (swap.State == "RECEIVED")
+                    {
+                        Log.Info("Found swap with ID: {0}", swap.Id);
+                        var swapResp = LCU.clientRequest("POST", "lol-champ-select/v1/session/swaps/" + swap.Id + "/accept");
+                        if (swapResp.IsSuccessful)
+                        {
+                            Log.Info("Accepted swap with ID: {0}", swap.Id);
+                        }
+                    }
                 }
-                // Get action ID
-                string swapId = swapResp.Content.Split("\"id\":")[1].Split(',')[0];
-
-                // Swap pick order
-                LCU.clientRequest("POST", "lol-champ-select/v1/session/swaps/" + swapId + "/accept");
-                LCU.clientRequest("POST", "lol-champ-select/v1/ongoing-swap/" + swapId + "/clear");
             }
         }
     }
